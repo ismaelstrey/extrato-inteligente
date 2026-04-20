@@ -39,11 +39,14 @@ function parseDate(value: string) {
 }
 
 function parseBRLNumber(value: string) {
-  const raw = value.trim();
+  const raw = value.trim().replace(/−/g, "-");
   const normalized = raw
     .replace(/\s/g, "")
+    .replace(/R\$/gi, "")
     .replace(/\./g, "")
     .replace(",", ".")
+    .replace(/^\+/, "")
+    .replace(/^(.*)-$/, "-$1")
     .replace(/^\((.*)\)$/, "-$1");
   const n = Number(normalized);
   if (!Number.isFinite(n)) return null;
@@ -52,6 +55,42 @@ function parseBRLNumber(value: string) {
 
 function normalizeDescricao(value: string) {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function inferMonthYear(text: string) {
+  const fullDate = /(\d{2})[\/\-](\d{2})[\/\-](\d{4})/.exec(text);
+  if (fullDate) {
+    const month = Number(fullDate[2]);
+    const year = Number(fullDate[3]);
+    if (month >= 1 && month <= 12 && year >= 1900) return { month, year };
+  }
+
+  const period = /PERIODO:\s*([A-ZÇÃÉÍÓÚ]+)\/(\d{4})/i.exec(text);
+  if (!period) return null;
+  const rawMonth = period[1]
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toUpperCase();
+  const year = Number(period[2]);
+
+  const map: Record<string, number> = {
+    JANEIRO: 1,
+    FEVEREIRO: 2,
+    MARCO: 3,
+    ABRIL: 4,
+    MAIO: 5,
+    JUNHO: 6,
+    JULHO: 7,
+    AGOSTO: 8,
+    SETEMBRO: 9,
+    OUTUBRO: 10,
+    NOVEMBRO: 11,
+    DEZEMBRO: 12,
+  };
+
+  const month = map[rawMonth];
+  if (!month || year < 1900) return null;
+  return { month, year };
 }
 
 function classifyCategoria(descricao: string): TransactionCategory {
@@ -76,6 +115,15 @@ function execOnce(re: RegExp, value: string) {
   return re.exec(value);
 }
 
+function hasNegativeMarker(line: string) {
+  const s = line.replace(/−/g, "-").replace(/\s+/g, " ").trim();
+  if (/[-]\s*R\$/i.test(s)) return true;
+  if (/R\$\s*[-]/i.test(s)) return true;
+  if (/\(\s*R\$/i.test(s)) return true;
+  if (/\d(?:\.\d{3})*(?:,\d{2})?\s*-\s*$/.test(s)) return true;
+  return false;
+}
+
 export function parseTransactionsFromText({
   text,
   template,
@@ -85,6 +133,7 @@ export function parseTransactionsFromText({
   template: Template;
   entityId: string;
 }): ParsedTransaction[] {
+  const monthYear = inferMonthYear(text);
   const reData = new RegExp(template.regexData);
   const reValor = new RegExp(template.regexValor);
   const reDescricao = template.regexDescricao ? new RegExp(template.regexDescricao) : null;
@@ -101,13 +150,19 @@ export function parseTransactionsFromText({
     const mValor = execOnce(reValor, line);
     if (!mData || !mValor) continue;
 
-    const date = parseDate(mData[1] ?? mData[0]);
+    const dateValue = (mData[1] ?? mData[0]).trim();
+    const date =
+      parseDate(dateValue) ??
+      (monthYear && /^\d{1,2}$/.test(dateValue)
+        ? new Date(Date.UTC(monthYear.year, monthYear.month - 1, Number(dateValue)))
+        : null);
     if (!date) continue;
 
     const numberValue = parseBRLNumber(mValor[1] ?? mValor[0]);
     if (numberValue === null) continue;
 
-    const tipo: TransactionType = numberValue < 0 ? "SAIDA" : "ENTRADA";
+    const isNegative = numberValue < 0 || hasNegativeMarker(line);
+    const tipo: TransactionType = isNegative ? "SAIDA" : "ENTRADA";
     const valor = Math.abs(numberValue).toFixed(2);
 
     const mDescricao = reDescricao ? execOnce(reDescricao, line) : null;

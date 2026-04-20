@@ -7,6 +7,7 @@ import { ApproveButton } from "@/app/app/statements/[statementId]/ApproveButton"
 import { IssuesPanel } from "@/app/app/statements/[statementId]/IssuesPanel";
 import { ReconcileButton } from "@/app/app/statements/[statementId]/ReconcileButton";
 import { TransactionsTable } from "@/app/app/statements/[statementId]/TransactionsTable";
+import { DeleteStatementButton } from "@/app/app/statements/[statementId]/DeleteStatementButton";
 
 export default async function StatementDetailPage({
   params,
@@ -83,6 +84,7 @@ export default async function StatementDetailPage({
           </a>
           <ReconcileButton statementId={statement.id} />
           <ApproveButton statementId={statement.id} disabled={hasHighIssues} />
+          <DeleteStatementButton statementId={statement.id} />
         </div>
       </div>
 
