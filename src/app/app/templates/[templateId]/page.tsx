@@ -7,7 +7,7 @@ import { TemplateForm } from "@/app/app/templates/TemplateForm";
 export default async function EditTemplatePage({
   params,
 }: {
-  params: { templateId: string };
+  params: Promise<{ templateId: string }>;
 }) {
   const session = await getServerAuthSession();
   const clientId = session?.user.clientId;
@@ -15,8 +15,10 @@ export default async function EditTemplatePage({
   if (!clientId) return null;
   if (role !== "CLIENT_ADMIN" && role !== "ADMIN_SAAS") redirect("/app/dashboard");
 
+  const { templateId } = await params;
+
   const template = await prisma.template.findFirst({
-    where: { id: params.templateId, clientId },
+    where: { id: templateId, clientId },
     select: { id: true, nome: true, identificador: true, regexData: true, regexValor: true, regexDescricao: true },
   });
 
@@ -45,4 +47,3 @@ export default async function EditTemplatePage({
     </div>
   );
 }
-

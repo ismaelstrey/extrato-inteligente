@@ -12,13 +12,13 @@ import { DeleteStatementButton } from "@/app/app/statements/[statementId]/Delete
 export default async function StatementDetailPage({
   params,
 }: {
-  params: { statementId: string };
+  params: Promise<{ statementId: string }>;
 }) {
   const session = await getServerAuthSession();
   const clientId = session?.user.clientId;
   if (!clientId) return null;
 
-  const { statementId } = params;
+  const { statementId } = await params;
 
   const statement = await prisma.statement.findFirst({
     where: { id: statementId, clientId },
@@ -104,4 +104,3 @@ export default async function StatementDetailPage({
     </div>
   );
 }
-
