@@ -30,6 +30,12 @@ export default async function AppLayout({
             Dashboard
           </Link>
           <Link
+            href="/app/dashboard/totais-diarios"
+            className="block rounded-lg px-3 py-2 text-zinc-700 hover:bg-zinc-100"
+          >
+            Totais diários
+          </Link>
+          <Link
             href="/app/statements"
             className="block rounded-lg px-3 py-2 text-zinc-700 hover:bg-zinc-100"
           >

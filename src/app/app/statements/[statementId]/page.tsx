@@ -82,6 +82,18 @@ export default async function StatementDetailPage({
           >
             Exportar CSV
           </a>
+          <a
+            className="h-10 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-950 transition hover:bg-zinc-50"
+            href={`/api/statements/${statement.id}/export/txt`}
+          >
+            Exportar TXT
+          </a>
+          <a
+            className="h-10 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-950 transition hover:bg-zinc-50"
+            href={`/api/statements/${statement.id}/export/ofx`}
+          >
+            Exportar OFX
+          </a>
           <ReconcileButton statementId={statement.id} />
           <ApproveButton statementId={statement.id} disabled={hasHighIssues} />
           <DeleteStatementButton statementId={statement.id} />

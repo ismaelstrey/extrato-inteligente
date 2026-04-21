@@ -1,8 +1,9 @@
+import Link from "next/link";
+
 import { getServerAuthSession } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { DashboardFilters } from "@/app/app/dashboard/DashboardFilters";
 import { DailyChart } from "@/app/app/dashboard/DailyChart";
-import { DailyTotalsTable } from "@/app/app/dashboard/DailyTotalsTable";
 
 function formatBRL(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -155,7 +156,20 @@ export default async function DashboardPage({
 
       <DailyChart points={dailyPoints} />
 
-      <DailyTotalsTable entities={entities} />
+      <div className="rounded-2xl border border-zinc-200 bg-white p-5">
+        <div className="text-sm font-medium text-zinc-900">Totais diários por banco</div>
+        <div className="mt-2 text-sm text-zinc-600">
+          Acesse a página dedicada para consultar e exportar os totais por dia.
+        </div>
+        <div className="mt-4">
+          <Link
+            href="/app/dashboard/totais-diarios"
+            className="inline-flex h-9 items-center rounded-xl bg-zinc-950 px-3 text-sm font-medium text-white transition hover:bg-zinc-900"
+          >
+            Abrir totais diários
+          </Link>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-zinc-200 bg-white p-5">

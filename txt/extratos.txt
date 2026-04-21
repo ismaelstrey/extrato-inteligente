@@ -1,0 +1,11 @@
+Cabeçalho;;;;;
+Competencia;01/01/2023;Conta Banco;8;Saldo Inicial;0
+Lançamentos;;;;;
+Data;Historico;Documento;Valor Debito (Soma);Valor Credito (Subtrai);
+01/01/2023;QR Code Pix enviado - Gutkopie Impressoes Ltda ;123456;;100,2;
+02/01/2023;Pix enviado - Elisabete Da Silva Gross ;123457;;50,65;
+02/01/2023;Pix recebido - Ifoodcom Agencia De Restaurantes Online Sa ;123457;300,5;;
+02/01/2023;Pix recebido - Marizet da Silva ;;50,36;;
+
+
+

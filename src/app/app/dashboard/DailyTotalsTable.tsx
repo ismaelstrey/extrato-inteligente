@@ -2,30 +2,23 @@
 
 import { useEffect, useMemo, useReducer } from "react";
 
+import {
+  formatDateBR,
+  inferCompetenciaFromRows,
+  mergeDailyTotals,
+  TipoFiltro,
+  toCsvDailyTotals,
+  toTxtDailyTotals,
+} from "@/lib/dashboard/dailyTotals";
+
 type EntityOption = { id: string; nome: string };
 type BankOption = { id: string; nome: string };
-type Tipo = "ENTRADA" | "SAIDA";
 
 function formatBRL(value: number) {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
   }).format(value);
-}
-
-function formatDateBR(value: string) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!m) return value;
-  return `${m[3]}/${m[2]}/${m[1]}`;
-}
-
-function toCsv(rows: { date: string; total: number }[]) {
-  const lines = ["data,valor_total_dia"];
-  for (const r of rows) {
-    const total = r.total.toFixed(2).replace(".", ",");
-    lines.push(`${r.date},${total}`);
-  }
-  return lines.join("\n");
 }
 
 export function DailyTotalsTable({ entities }: { entities: EntityOption[] }) {
@@ -35,21 +28,26 @@ export function DailyTotalsTable({ entities }: { entities: EntityOption[] }) {
         entityId: string;
         banks: BankOption[];
         bankId: string;
-        tipo: Tipo;
+        filter: TipoFiltro;
         loadingBanks: boolean;
         loadingTotals: boolean;
         error: string | null;
-        totals: { date: string; total: number }[];
+        totalsEntrada: { date: string; total: number }[];
+        totalsSaida: { date: string; total: number }[];
       },
       action:
         | { type: "selectEntity"; entityId: string }
         | { type: "selectBank"; bankId: string }
-        | { type: "setTipo"; tipo: Tipo }
+        | { type: "setFilter"; filter: TipoFiltro }
         | { type: "banksLoading" }
         | { type: "banksLoaded"; banks: BankOption[] }
         | { type: "banksError"; message: string }
         | { type: "totalsLoading" }
-        | { type: "totalsLoaded"; totals: { date: string; total: number }[] }
+        | {
+            type: "totalsLoaded";
+            totalsEntrada: { date: string; total: number }[];
+            totalsSaida: { date: string; total: number }[];
+          }
         | { type: "totalsError"; message: string },
     ) => {
       switch (action.type) {
@@ -59,7 +57,8 @@ export function DailyTotalsTable({ entities }: { entities: EntityOption[] }) {
             entityId: action.entityId,
             banks: [],
             bankId: "",
-            totals: [],
+            totalsEntrada: [],
+            totalsSaida: [],
             error: null,
             loadingBanks: false,
             loadingTotals: false,
@@ -68,12 +67,13 @@ export function DailyTotalsTable({ entities }: { entities: EntityOption[] }) {
           return {
             ...prev,
             bankId: action.bankId,
-            totals: [],
+            totalsEntrada: [],
+            totalsSaida: [],
             error: null,
             loadingTotals: false,
           };
-        case "setTipo":
-          return { ...prev, tipo: action.tipo, totals: [], error: null, loadingTotals: false };
+        case "setFilter":
+          return { ...prev, filter: action.filter, error: null };
         case "banksLoading":
           return { ...prev, loadingBanks: true, error: null };
         case "banksLoaded":
@@ -83,7 +83,12 @@ export function DailyTotalsTable({ entities }: { entities: EntityOption[] }) {
         case "totalsLoading":
           return { ...prev, loadingTotals: true, error: null };
         case "totalsLoaded":
-          return { ...prev, loadingTotals: false, totals: action.totals ?? [] };
+          return {
+            ...prev,
+            loadingTotals: false,
+            totalsEntrada: action.totalsEntrada ?? [],
+            totalsSaida: action.totalsSaida ?? [],
+          };
         case "totalsError":
           return { ...prev, loadingTotals: false, error: action.message };
         default:
@@ -94,11 +99,12 @@ export function DailyTotalsTable({ entities }: { entities: EntityOption[] }) {
       entityId: "",
       banks: [],
       bankId: "",
-      tipo: "ENTRADA",
+      filter: "TODOS",
       loadingBanks: false,
       loadingTotals: false,
       error: null,
-      totals: [],
+      totalsEntrada: [],
+      totalsSaida: [],
     },
   );
 
@@ -146,21 +152,29 @@ export function DailyTotalsTable({ entities }: { entities: EntityOption[] }) {
 
     let cancelled = false;
     dispatch({ type: "totalsLoading" });
-    fetch(
-      `/api/dashboard/daily-totals?entityId=${encodeURIComponent(
-        state.entityId,
-      )}&templateId=${encodeURIComponent(
-        state.bankId,
-      )}&tipo=${encodeURIComponent(state.tipo)}`,
-    )
-      .then(async (r) => {
+    const base = `/api/dashboard/daily-totals?entityId=${encodeURIComponent(
+      state.entityId,
+    )}&templateId=${encodeURIComponent(state.bankId)}`;
+
+    Promise.all([
+      fetch(`${base}&tipo=ENTRADA`).then(async (r) => {
         const json = await r.json().catch(() => null);
-        if (!r.ok) throw new Error(json?.message ?? "Falha ao carregar totais.");
+        if (!r.ok) throw new Error(json?.message ?? "Falha ao carregar totais de entradas.");
         return json as { ok: true; totals: { date: string; total: number }[] };
-      })
-      .then((json) => {
+      }),
+      fetch(`${base}&tipo=SAIDA`).then(async (r) => {
+        const json = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(json?.message ?? "Falha ao carregar totais de saídas.");
+        return json as { ok: true; totals: { date: string; total: number }[] };
+      }),
+    ])
+      .then(([entrada, saida]) => {
         if (cancelled) return;
-        dispatch({ type: "totalsLoaded", totals: json.totals ?? [] });
+        dispatch({
+          type: "totalsLoaded",
+          totalsEntrada: entrada.totals ?? [],
+          totalsSaida: saida.totals ?? [],
+        });
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -168,15 +182,39 @@ export function DailyTotalsTable({ entities }: { entities: EntityOption[] }) {
           type: "totalsError",
           message: e instanceof Error ? e.message : "Falha ao carregar totais.",
         });
-      })
-      .finally(() => {
-        if (cancelled) return;
       });
 
     return () => {
       cancelled = true;
     };
-  }, [state.entityId, state.bankId, state.tipo]);
+  }, [state.entityId, state.bankId]);
+
+  useEffect(() => {
+    const key = "dashboard:totais-diarios:tipo";
+    try {
+      const stored = sessionStorage.getItem(key);
+      if (stored === "TODOS" || stored === "ENTRADA" || stored === "SAIDA") {
+        dispatch({ type: "setFilter", filter: stored });
+      }
+    } catch {
+    }
+  }, []);
+
+  useEffect(() => {
+    const key = "dashboard:totais-diarios:tipo";
+    try {
+      sessionStorage.setItem(key, state.filter);
+    } catch {
+    }
+  }, [state.filter]);
+
+  const merged = useMemo(() => {
+    return mergeDailyTotals({ entrada: state.totalsEntrada, saida: state.totalsSaida });
+  }, [state.totalsEntrada, state.totalsSaida]);
+
+  const viewRowsTotals = useMemo(() => {
+    return state.filter === "ENTRADA" ? state.totalsEntrada : state.totalsSaida;
+  }, [state.filter, state.totalsEntrada, state.totalsSaida]);
 
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white">
@@ -242,17 +280,32 @@ export function DailyTotalsTable({ entities }: { entities: EntityOption[] }) {
 
         <div className="space-y-1">
           <div className="text-sm font-medium text-zinc-900">Tipo</div>
-          <div className="grid h-11 grid-cols-2 overflow-hidden rounded-xl border border-zinc-200 bg-white">
+          <div className="grid h-11 grid-cols-3 overflow-hidden rounded-xl border border-zinc-200 bg-white">
             <button
               type="button"
               className={
-                state.tipo === "ENTRADA"
+                state.filter === "TODOS"
                   ? "bg-zinc-950 text-sm font-medium text-white"
                   : "bg-white text-sm font-medium text-zinc-700"
               }
               onClick={() => {
-                if (state.tipo === "ENTRADA") return;
-                dispatch({ type: "setTipo", tipo: "ENTRADA" });
+                if (state.filter === "TODOS") return;
+                dispatch({ type: "setFilter", filter: "TODOS" });
+              }}
+              disabled={state.loadingTotals}
+            >
+              Todos
+            </button>
+            <button
+              type="button"
+              className={
+                state.filter === "ENTRADA"
+                  ? "bg-zinc-950 text-sm font-medium text-white"
+                  : "bg-white text-sm font-medium text-zinc-700"
+              }
+              onClick={() => {
+                if (state.filter === "ENTRADA") return;
+                dispatch({ type: "setFilter", filter: "ENTRADA" });
               }}
               disabled={state.loadingTotals}
             >
@@ -261,13 +314,13 @@ export function DailyTotalsTable({ entities }: { entities: EntityOption[] }) {
             <button
               type="button"
               className={
-                state.tipo === "SAIDA"
+                state.filter === "SAIDA"
                   ? "bg-zinc-950 text-sm font-medium text-white"
                   : "bg-white text-sm font-medium text-zinc-700"
               }
               onClick={() => {
-                if (state.tipo === "SAIDA") return;
-                dispatch({ type: "setTipo", tipo: "SAIDA" });
+                if (state.filter === "SAIDA") return;
+                dispatch({ type: "setFilter", filter: "SAIDA" });
               }}
               disabled={state.loadingTotals}
             >
@@ -290,7 +343,12 @@ export function DailyTotalsTable({ entities }: { entities: EntityOption[] }) {
           <div className="text-sm text-zinc-700">
             {entityName && bankName ? (
               <span className="font-medium text-zinc-950">
-                {entityName} · {bankName} · {state.tipo === "ENTRADA" ? "Entradas" : "Saídas"}
+                {entityName} · {bankName} ·{" "}
+                {state.filter === "TODOS"
+                  ? "Todos"
+                  : state.filter === "ENTRADA"
+                    ? "Entradas"
+                    : "Saídas"}
               </span>
             ) : (
               <span>Selecione empresa e banco.</span>
@@ -300,27 +358,74 @@ export function DailyTotalsTable({ entities }: { entities: EntityOption[] }) {
             ) : null}
           </div>
 
-          <button
-            type="button"
-            className="h-10 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 disabled:bg-zinc-50 disabled:text-zinc-400"
-            disabled={!state.totals.length || state.loadingTotals}
-            onClick={() => {
-              const csv = toCsv(state.totals);
-              const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              const safeEntity = (entityName || "empresa").replaceAll(/\s+/g, "-");
-              const safeBank = (bankName || "banco").replaceAll(/\s+/g, "-");
-              a.download = `totais-diarios_${safeEntity}_${safeBank}_${state.tipo.toLowerCase()}.csv`;
-              document.body.appendChild(a);
-              a.click();
-              a.remove();
-              URL.revokeObjectURL(url);
-            }}
-          >
-            Exportar CSV
-          </button>
+          <div className="flex flex-col gap-2 md:flex-row md:items-center">
+            <button
+              type="button"
+              className="h-10 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 disabled:bg-zinc-50 disabled:text-zinc-400"
+              disabled={
+                state.loadingTotals ||
+                (state.filter === "TODOS"
+                  ? !merged.length
+                  : !viewRowsTotals.length)
+              }
+              onClick={() => {
+                const csv = toCsvDailyTotals({
+                  filter: state.filter,
+                  entrada: state.totalsEntrada,
+                  saida: state.totalsSaida,
+                });
+                const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                const safeEntity = (entityName || "empresa").replaceAll(/\s+/g, "-");
+                const safeBank = (bankName || "banco").replaceAll(/\s+/g, "-");
+                a.download = `totais-diarios_${safeEntity}_${safeBank}_${state.filter.toLowerCase()}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              Exportar CSV
+            </button>
+            <button
+              type="button"
+              className="h-10 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-900 disabled:bg-zinc-50 disabled:text-zinc-400"
+              disabled={
+                state.loadingTotals ||
+                (state.filter === "TODOS"
+                  ? !merged.length
+                  : !viewRowsTotals.length)
+              }
+              onClick={() => {
+                const competencia = inferCompetenciaFromRows({
+                  entrada: state.totalsEntrada,
+                  saida: state.totalsSaida,
+                });
+                const txt = toTxtDailyTotals({
+                  filter: state.filter,
+                  entrada: state.totalsEntrada,
+                  saida: state.totalsSaida,
+                  competencia,
+                  contaBanco: "8",
+                });
+                const blob = new Blob([txt], { type: "text/plain;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                const safeEntity = (entityName || "empresa").replaceAll(/\s+/g, "-");
+                const safeBank = (bankName || "banco").replaceAll(/\s+/g, "-");
+                a.download = `totais-diarios_${safeEntity}_${safeBank}_${state.filter.toLowerCase()}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              Exportar TXT
+            </button>
+          </div>
         </div>
       </div>
 
@@ -329,26 +434,44 @@ export function DailyTotalsTable({ entities }: { entities: EntityOption[] }) {
           <thead className="border-b border-zinc-200 bg-white text-xs uppercase tracking-wide text-zinc-500">
             <tr>
               <th className="px-5 py-3">Data</th>
-              <th className="px-5 py-3">Valor total do dia</th>
+              {state.filter === "TODOS" ? (
+                <>
+                  <th className="px-5 py-3">Entradas</th>
+                  <th className="px-5 py-3">Saídas</th>
+                </>
+              ) : (
+                <th className="px-5 py-3">Valor total do dia</th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-100">
-            {state.totals.map((r) => (
-              <tr key={r.date} className="hover:bg-zinc-50">
-                <td className="px-5 py-3 font-medium text-zinc-950">{formatDateBR(r.date)}</td>
-                <td className="px-5 py-3 text-zinc-700">{formatBRL(r.total)}</td>
-              </tr>
-            ))}
-            {!state.loadingTotals && state.entityId && state.bankId && !state.totals.length ? (
+            {state.filter === "TODOS"
+              ? merged.map((r) => (
+                  <tr key={r.date} className="hover:bg-zinc-50">
+                    <td className="px-5 py-3 font-medium text-zinc-950">{formatDateBR(r.date)}</td>
+                    <td className="px-5 py-3 text-zinc-700">{formatBRL(r.entrada)}</td>
+                    <td className="px-5 py-3 text-zinc-700">{formatBRL(r.saida)}</td>
+                  </tr>
+                ))
+              : viewRowsTotals.map((r) => (
+                  <tr key={r.date} className="hover:bg-zinc-50">
+                    <td className="px-5 py-3 font-medium text-zinc-950">{formatDateBR(r.date)}</td>
+                    <td className="px-5 py-3 text-zinc-700">{formatBRL(r.total)}</td>
+                  </tr>
+                ))}
+            {!state.loadingTotals &&
+            state.entityId &&
+            state.bankId &&
+            (state.filter === "TODOS" ? !merged.length : !viewRowsTotals.length) ? (
               <tr>
-                <td className="px-5 py-6 text-zinc-600" colSpan={2}>
+                <td className="px-5 py-6 text-zinc-600" colSpan={state.filter === "TODOS" ? 3 : 2}>
                   Nenhuma transação encontrada.
                 </td>
               </tr>
             ) : null}
             {!state.entityId || !state.bankId ? (
               <tr>
-                <td className="px-5 py-6 text-zinc-600" colSpan={2}>
+                <td className="px-5 py-6 text-zinc-600" colSpan={state.filter === "TODOS" ? 3 : 2}>
                   Selecione empresa e banco para visualizar os totais.
                 </td>
               </tr>
