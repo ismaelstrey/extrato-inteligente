@@ -2,6 +2,7 @@ import { getServerAuthSession } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { DashboardFilters } from "@/app/app/dashboard/DashboardFilters";
 import { DailyChart } from "@/app/app/dashboard/DailyChart";
+import { DailyTotalsTable } from "@/app/app/dashboard/DailyTotalsTable";
 
 function formatBRL(value: number) {
   return new Intl.NumberFormat("pt-BR", {
@@ -153,6 +154,8 @@ export default async function DashboardPage({
       <DashboardFilters entities={entities} />
 
       <DailyChart points={dailyPoints} />
+
+      <DailyTotalsTable entities={entities} />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-zinc-200 bg-white p-5">
