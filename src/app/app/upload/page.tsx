@@ -33,10 +33,10 @@ export default async function UploadPage() {
         </div>
       ) : (
         <div className="rounded-2xl border border-zinc-200 bg-white p-5 text-sm text-zinc-700">
-          Você ainda não tem entidades cadastradas. Crie pelo seed ou implemente a
-          tela de entidades.{" "}
-          <Link className="font-medium text-zinc-950" href="/app/dashboard">
-            Voltar ao dashboard
+          Você ainda não tem entidades cadastradas. Cadastre uma entidade antes de
+          fazer upload.{" "}
+          <Link className="font-medium text-zinc-950" href="/app/entities">
+            Ir para Entidades
           </Link>
         </div>
       )}

@@ -2,9 +2,9 @@ import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
-export async function reconcileStatement(statementId: string) {
+export async function reconcileStatement(input: { statementId: string; clientId: string }) {
   const statement = await prisma.statement.findFirst({
-    where: { id: statementId },
+    where: { id: input.statementId, clientId: input.clientId },
     select: {
       id: true,
       status: true,
@@ -59,16 +59,16 @@ export async function reconcileStatement(statementId: string) {
   await prisma.$transaction(async (tx) => {
     for (const i of issuesToOpen) {
       await tx.extractionIssue.upsert({
-        where: { statementId_dedupeKey: { statementId, dedupeKey: i.dedupeKey } },
+        where: { statementId_dedupeKey: { statementId: input.statementId, dedupeKey: i.dedupeKey } },
         create: {
-          statementId,
+          statementId: input.statementId,
           severity: "HIGH",
           type: "SALDO_DIVERGENTE",
           dedupeKey: i.dedupeKey,
           payload: i.payload,
         },
         update: (await tx.extractionIssue.findFirst({
-          where: { statementId, dedupeKey: i.dedupeKey },
+          where: { statementId: input.statementId, dedupeKey: i.dedupeKey },
           select: { status: true },
         }))?.status === "IGNORED"
           ? { payload: i.payload }
@@ -78,7 +78,7 @@ export async function reconcileStatement(statementId: string) {
 
     for (const key of issuesToResolve) {
       const existing = await tx.extractionIssue.findFirst({
-        where: { statementId, dedupeKey: key },
+        where: { statementId: input.statementId, dedupeKey: key },
         select: { id: true, status: true },
       });
       if (!existing) continue;
@@ -90,7 +90,7 @@ export async function reconcileStatement(statementId: string) {
     }
 
     const issuesOpen = await tx.extractionIssue.count({
-      where: { statementId, status: "OPEN" },
+      where: { statementId: input.statementId, status: "OPEN" },
     });
 
     const nextStatus = issuesOpen > 0 ? "IN_REVIEW" : "PROCESSED";
@@ -98,16 +98,16 @@ export async function reconcileStatement(statementId: string) {
       statement.status === "APPROVED" || statement.status === "EXPORTED" ? issuesOpen > 0 : true;
 
     if (shouldOverride) {
-      await tx.statement.update({ where: { id: statementId }, data: { status: nextStatus } });
+      await tx.statement.update({ where: { id: input.statementId }, data: { status: nextStatus } });
     }
   });
 
   const issuesOpen = await prisma.extractionIssue.count({
-    where: { statementId, status: "OPEN" },
+    where: { statementId: input.statementId, status: "OPEN" },
   });
 
-  const status = await prisma.statement.findUnique({
-    where: { id: statementId },
+  const status = await prisma.statement.findFirst({
+    where: { id: input.statementId, clientId: input.clientId },
     select: { status: true },
   });
 

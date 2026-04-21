@@ -5,6 +5,7 @@ import { z } from "zod";
 import { getServerAuthSession } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { reconcileStatement } from "@/server/reconcile/reconcileStatement";
+import { computeTransactionDedupeHash, normalizeTransactionDescricao } from "@/server/transactions/dedupe";
 
 export const runtime = "nodejs";
 
@@ -48,6 +49,7 @@ export async function PATCH(
     where: { id: transactionId },
     select: {
       id: true,
+      entityId: true,
       data: true,
       descricao: true,
       categoria: true,
@@ -70,6 +72,13 @@ export async function PATCH(
   }
 
   const valor = Number(parsed.data.valor.toFixed(2));
+  const descricao = normalizeTransactionDescricao(parsed.data.descricao);
+  const dedupeHash = computeTransactionDedupeHash({
+    entityId: tx.entityId,
+    date,
+    valor: valor.toFixed(2),
+    descricao,
+  });
 
   const before = {
     data: tx.data.toISOString().slice(0, 10),
@@ -81,38 +90,49 @@ export async function PATCH(
 
   const after = {
     data: parsed.data.data,
-    descricao: parsed.data.descricao,
+    descricao,
     categoria: parsed.data.categoria,
     tipo: parsed.data.tipo,
     valor: valor.toFixed(2),
   };
 
-  await prisma.$transaction([
-    prisma.transactionAudit.create({
-      data: {
-        transactionId: tx.id,
-        userId,
-        action: "UPDATE",
-        before,
-        after,
-      },
-    }),
-    prisma.transaction.update({
-      where: { id: tx.id },
-      data: {
-        data: date,
-        descricao: parsed.data.descricao,
-        categoria: parsed.data.categoria,
-        tipo: parsed.data.tipo,
-        valor: valor.toFixed(2),
-      },
-    }),
-  ]);
+  try {
+    await prisma.$transaction([
+      prisma.transactionAudit.create({
+        data: {
+          transactionId: tx.id,
+          userId,
+          action: "UPDATE",
+          before,
+          after,
+        },
+      }),
+      prisma.transaction.update({
+        where: { id: tx.id },
+        data: {
+          data: date,
+          descricao,
+          categoria: parsed.data.categoria,
+          tipo: parsed.data.tipo,
+          valor: valor.toFixed(2),
+          dedupeHash,
+        },
+      }),
+    ]);
+  } catch (error) {
+    const message = String(error);
+    if (message.includes("Unique constraint failed") || message.includes("P2002")) {
+      return Response.json(
+        { ok: false, message: "Atualização geraria duplicidade de transação." },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
 
-  const reconcile = await reconcileStatement(tx.statement.id);
+  const reconcile = await reconcileStatement({ statementId: tx.statement.id, clientId });
   return Response.json(
     { ok: true, reconcile: reconcile.ok ? { issuesOpen: reconcile.issuesOpen, status: reconcile.status } : null },
     { status: 200 },
   );
 }
-

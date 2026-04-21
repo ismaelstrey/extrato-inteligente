@@ -1,7 +1,7 @@
-import crypto from "crypto";
-
 import type { Template, TransactionCategory, TransactionType } from "@prisma/client";
 import { z } from "zod";
+
+import { computeTransactionDedupeHash, normalizeTransactionDescricao } from "@/server/transactions/dedupe";
 
 const ParsedTransactionSchema = z.object({
   data: z.date(),
@@ -53,10 +53,6 @@ function parseBRLNumber(value: string) {
   return n;
 }
 
-function normalizeDescricao(value: string) {
-  return value.replace(/\s+/g, " ").trim();
-}
-
 function inferMonthYear(text: string) {
   const fullDate = /(\d{2})[\/\-](\d{2})[\/\-](\d{4})/.exec(text);
   if (fullDate) {
@@ -94,7 +90,7 @@ function inferMonthYear(text: string) {
 }
 
 function classifyCategoria(descricao: string): TransactionCategory {
-  const d = normalizeDescricao(descricao).toLowerCase();
+  const d = normalizeTransactionDescricao(descricao).toLowerCase();
   if (d.includes("tarifa")) return "TARIFA";
   if (d.includes("juros")) return "JUROS";
   if (d.includes("iof")) return "IMPOSTOS";
@@ -104,10 +100,6 @@ function classifyCategoria(descricao: string): TransactionCategory {
   if (d.includes("vendas")) return "VENDAS";
   if (d.includes("ted") || d.includes("doc") || d.includes("transfer")) return "TRANSFERENCIA";
   return "OUTROS";
-}
-
-function sha(value: string) {
-  return crypto.createHash("sha256").update(value).digest("hex");
 }
 
 function execOnce(re: RegExp, value: string) {
@@ -169,7 +161,7 @@ export function parseTransactionsFromText({
     let descricao = (mDescricao?.[1] ?? mDescricao?.[0] ?? "").trim();
 
     if (!descricao) {
-      descricao = normalizeDescricao(
+      descricao = normalizeTransactionDescricao(
         line
           .replace(mData[0], "")
           .replace(mValor[0], "")
@@ -180,15 +172,12 @@ export function parseTransactionsFromText({
 
     if (!descricao) descricao = "Transação";
 
-    const normalizedDescricao = normalizeDescricao(descricao).toLowerCase();
     const categoria = classifyCategoria(descricao);
-    const dedupeHash = sha(
-      `${entityId}|${date.toISOString().slice(0, 10)}|${valor}|${normalizedDescricao}`,
-    );
+    const dedupeHash = computeTransactionDedupeHash({ entityId, date, valor, descricao });
 
     const candidate = ParsedTransactionSchema.safeParse({
       data: date,
-      descricao: normalizeDescricao(descricao),
+      descricao: normalizeTransactionDescricao(descricao),
       categoria,
       valor,
       tipo,

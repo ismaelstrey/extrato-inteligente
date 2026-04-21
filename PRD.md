@@ -219,3 +219,24 @@ Agentes de desenvolvimento:
 /agents/backend.md
 /agents/frontend.md
 /agents/qa.md
+
+Modelos de extratos bancários para ser processador
+/extratos/UNICRED.pdf
+/extratos/BANRISUL.pdf
+/extratos/PAGBANK.pdf
+/extratos/CRESOL.pdf
+
+SAIDA:
+JSON estruturado com transações
+descarte do PDF após processamento
+{
+    "transactions": [
+        {
+            "data": "2023-01-01",
+            "descricao": "Compra de produtos",
+            "categoria": "Produtos", // Caso esteja em branco ou somente R$, sereá a soma do valor do dia checa isso  e adiciona na descrição soma do dia de todos os produtos com esta categoria, categoria: "TOTAL"
+            "valor": 100.00,
+            "tipo": "entrada" || "saída"
+        }
+    ]
+}

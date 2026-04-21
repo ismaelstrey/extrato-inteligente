@@ -1,5 +1,3 @@
-import "dotenv/config";
-
 import { PrismaClient } from "@prisma/client";
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { neonConfig } from "@neondatabase/serverless";
@@ -21,4 +19,3 @@ const t = await prisma.template.findFirst({
 
 process.stdout.write(JSON.stringify(t, null, 2) + "\n");
 await prisma.$disconnect();
-

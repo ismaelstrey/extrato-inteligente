@@ -23,7 +23,7 @@ export async function POST(
 
   if (!statement) return Response.json({ ok: false, message: "Extrato não encontrado." }, { status: 404 });
 
-  const result = await reconcileStatement(statement.id);
+  const result = await reconcileStatement({ statementId: statement.id, clientId });
   if (!result.ok) return Response.json({ ok: false, message: "Falha ao reconciliar." }, { status: 500 });
 
   return Response.json(
@@ -31,4 +31,3 @@ export async function POST(
     { status: 200 },
   );
 }
-

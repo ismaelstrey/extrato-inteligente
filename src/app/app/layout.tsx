@@ -11,6 +11,7 @@ export default async function AppLayout({
 }) {
   const session = await getServerAuthSession();
   if (!session?.user) redirect("/login");
+  const role = session.user.role;
 
   return (
     <div className="flex min-h-full flex-1 bg-zinc-50">
@@ -40,6 +41,28 @@ export default async function AppLayout({
           >
             Templates
           </Link>
+          <Link
+            href="/app/entities"
+            className="block rounded-lg px-3 py-2 text-zinc-700 hover:bg-zinc-100"
+          >
+            Entidades
+          </Link>
+          {role === "CLIENT_ADMIN" || role === "ADMIN_SAAS" ? (
+            <Link
+              href="/app/users"
+              className="block rounded-lg px-3 py-2 text-zinc-700 hover:bg-zinc-100"
+            >
+              Usuários
+            </Link>
+          ) : null}
+          {role === "ADMIN_SAAS" ? (
+            <Link
+              href="/app/clients"
+              className="block rounded-lg px-3 py-2 text-zinc-700 hover:bg-zinc-100"
+            >
+              Clientes
+            </Link>
+          ) : null}
           <Link
             href="/app/upload"
             className="block rounded-lg px-3 py-2 text-zinc-700 hover:bg-zinc-100"

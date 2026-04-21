@@ -11,6 +11,8 @@ export function LoginForm() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [twoFactorStep, setTwoFactorStep] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,12 +28,31 @@ export function LoginForm() {
           redirect: false,
           email,
           password,
+          ...(twoFactorStep ? { twoFactorCode } : {}),
           callbackUrl,
         });
 
         setLoading(false);
 
         if (!res || res.error) {
+          if (res?.error === "2FA_REQUIRED") {
+            setTwoFactorStep(true);
+            setError("Código enviado para seu email.");
+            return;
+          }
+          if (res?.error === "2FA_INVALID") {
+            setTwoFactorStep(true);
+            setError("Código inválido ou expirado.");
+            return;
+          }
+          if (res?.error === "2FA_UNAVAILABLE") {
+            setError("2FA indisponível: configure SMTP no servidor.");
+            return;
+          }
+          if (res?.error === "2FA_DELIVERY_FAILED") {
+            setError("Falha ao enviar o código de verificação.");
+            return;
+          }
           setError("Email ou senha inválidos.");
           return;
         }
@@ -67,6 +88,21 @@ export function LoginForm() {
           required
         />
       </div>
+      {twoFactorStep ? (
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-zinc-900" htmlFor="twoFactorCode">
+            Código (2FA)
+          </label>
+          <input
+            id="twoFactorCode"
+            className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm outline-none ring-0 focus:border-zinc-300"
+            inputMode="numeric"
+            value={twoFactorCode}
+            onChange={(e) => setTwoFactorCode(e.target.value)}
+            required
+          />
+        </div>
+      ) : null}
       {error ? (
         <p className="text-sm text-red-600">{error}</p>
       ) : (
@@ -84,4 +120,3 @@ export function LoginForm() {
     </form>
   );
 }
-
