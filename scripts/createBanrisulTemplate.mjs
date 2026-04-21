@@ -1,3 +1,4 @@
+import "dotenv/config";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -10,13 +11,18 @@ import ws from "ws";
 
 neonConfig.webSocketConstructor = ws;
 
+const datasourceUrl = process.env.DATABASE_URL ?? "";
+if (!datasourceUrl) throw new Error("DATABASE_URL não está configurado.");
+
 const prisma = new PrismaClient({
   adapter: new PrismaNeon({
-    connectionString: process.env.DATABASE_URL ?? "",
+    connectionString: datasourceUrl,
   }),
 });
 
-const pdfPath = path.join(process.cwd(), "extrato01-04-2026_10-59-06_02-2026.pdf");
+const pdfArg = process.argv[2] ?? "extrato01-04-2026_10-59-06_02-2026.pdf";
+const bankArg = (process.argv[3] ?? "banrisul").toLowerCase();
+const pdfPath = path.isAbsolute(pdfArg) ? pdfArg : path.join(process.cwd(), pdfArg);
 const worker = path.join(process.cwd(), "node_modules", "pdfjs-dist", "legacy", "build", "pdf.worker.mjs");
 if (fs.existsSync(worker)) PDFParse.setWorker(pathToFileURL(worker).href);
 
@@ -28,14 +34,38 @@ await parser.destroy();
 const text = result.text ?? "";
 if (!text) throw new Error("Falha ao extrair texto do PDF.");
 
-const template = {
-  nome: "Banrisul",
-  identificador: "B\\s*A\\s*N\\s*R\\s*I\\s*S\\s*U\\s*L",
-  regexData: "^\\s*(\\d{1,2})\\b",
-  regexValor: "([0-9]{1,3}(?:\\.[0-9]{3})*,[0-9]{2}-?)$",
-  regexDescricao:
-    "^\\s*\\d{1,2}\\s+(.+?)\\s+[0-9A-Za-z]+\\s+[0-9]{1,3}(?:\\.[0-9]{3})*,[0-9]{2}-?$",
+const templatesByBank = {
+  banrisul: {
+    nome: "Banrisul",
+    identificador: "B\\s*A\\s*N\\s*R\\s*I\\s*S\\s*U\\s*L",
+    regexData: "^\\s*(\\d{1,2})\\b",
+    regexValor: "([0-9]{1,3}(?:\\.[0-9]{3})*,[0-9]{2}-?)$",
+    regexDescricao:
+      "^\\s*\\d{1,2}\\s+(.+?)\\s+[0-9A-Za-z]+\\s+[0-9]{1,3}(?:\\.[0-9]{3})*,[0-9]{2}-?$",
+  },
+  cresol: {
+    nome: "Cresol",
+    identificador: "Consulta\\s+Posi[cç][aã]o\\s+consolidada",
+    regexData: "(\\d{2}\\/\\d{2}\\/\\d{4})\\s*$",
+    regexValor: "R\\$\\s*([0-9]{1,3}(?:\\.[0-9]{3})*,[0-9]{2})",
+    regexDescricao:
+      "^(.+?)\\s+[\\+\\-]\\s*R\\$\\s*[0-9]{1,3}(?:\\.[0-9]{3})*,[0-9]{2}\\s+\\d{2}\\/\\d{2}\\/\\d{4}\\s*$",
+  },
+  unicred: {
+    nome: "Unicred",
+    identificador: "ag[eê]ncia\\s+UNICRED",
+    regexData: "(?:^|\\s)(\\d{2}\\/\\d{2}\\/\\d{4})(?!.*\\d{2}\\/\\d{2}\\/\\d{4})",
+    regexValor:
+      "(?:^|\\s)\\d{2}\\/\\d{2}\\/\\d{4}(?!.*\\d{2}\\/\\d{2}\\/\\d{4}).*?\\s(-?[0-9]{1,3}(?:\\.[0-9]{3})*,[0-9]{2})\\s+[0-9]{1,3}(?:\\.[0-9]{3})*,[0-9]{2}\\s*$",
+    regexDescricao:
+      "(?:^|\\s)\\d{2}\\/\\d{2}\\/\\d{4}(?!.*\\d{2}\\/\\d{2}\\/\\d{4})\\s+(.+?)\\s+-?[0-9]{1,3}(?:\\.[0-9]{3})*,[0-9]{2}\\s+[0-9]{1,3}(?:\\.[0-9]{3})*,[0-9]{2}\\s*$",
+  },
 };
+
+const template = templatesByBank[bankArg];
+if (!template) {
+  throw new Error(`Banco inválido: ${bankArg}. Use: ${Object.keys(templatesByBank).join(", ")}`);
+}
 
 const matches = text
   .split(/\r?\n/g)

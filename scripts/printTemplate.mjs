@@ -1,3 +1,5 @@
+import "dotenv/config";
+
 import { PrismaClient } from "@prisma/client";
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { neonConfig } from "@neondatabase/serverless";
@@ -5,9 +7,12 @@ import ws from "ws";
 
 neonConfig.webSocketConstructor = ws;
 
+const datasourceUrl = process.env.DATABASE_URL ?? "";
+if (!datasourceUrl) throw new Error("DATABASE_URL não está configurado.");
+
 const prisma = new PrismaClient({
   adapter: new PrismaNeon({
-    connectionString: process.env.DATABASE_URL ?? "",
+    connectionString: datasourceUrl,
   }),
 });
 
