@@ -292,8 +292,7 @@ function parseBanrisulTransactionsFromText(input: {
       Boolean(mValue[2]) ||
       normalizedLine.includes("pix enviado") ||
       normalizedLine.includes("pix banri env") ||
-      normalizedLine.includes("pg.titulo") ||
-      normalizedLine.includes("vero deb");
+      normalizedLine.includes("pg.titulo");
 
     const tipo: TransactionType = shouldBeSaida ? "SAIDA" : "ENTRADA";
     const valor = Math.abs(numberValue).toFixed(2);

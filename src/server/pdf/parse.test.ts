@@ -201,7 +201,7 @@ test("parseTransactionsFromText (BANRISUL) suporta MOVIMENTOS MMM/AAAA e linhas 
   assert.equal(out[0].valor, "0.02");
 
   assert.equal(out[1].data.toISOString().slice(0, 10), "2026-03-02");
-  assert.equal(out[1].tipo, "SAIDA");
+  assert.equal(out[1].tipo, "ENTRADA");
   assert.equal(out[1].valor, "98.90");
 
   assert.equal(out[2].data.toISOString().slice(0, 10), "2026-03-02");
