@@ -149,6 +149,23 @@ function extractFullDateSegments(text: string) {
   return out;
 }
 
+function isPagBankTemplate(template: Template) {
+  const key = `${template.nome ?? ""} ${template.identificador ?? ""}`.toUpperCase();
+  return key.includes("PAGBANK") || key.includes("PAGSEGURO") || key.includes("PAG SEGURO");
+}
+
+function stripPagBankNonMovements(text: string) {
+  return (
+    text
+      .replace(/\r/g, "")
+      .replace(/Saldo do dia\s+\d{2}\/\d{2}\/\d{4}\s+R\$\s*[0-9\.\,]+/gi, " ")
+      .replace(/Descricao\s+Data\s+Valor/gi, " ")
+      .replace(/--\s*\d+\s+of\s+\d+\s*--/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
+}
+
 export function parseTransactionsFromText({
   text,
   template,
@@ -158,14 +175,15 @@ export function parseTransactionsFromText({
   template: Template;
   entityId: string;
 }): ParsedTransaction[] {
-  const monthYear = inferMonthYear(text);
+  const cleanedText = isPagBankTemplate(template) ? stripPagBankNonMovements(text) : text;
+  const monthYear = inferMonthYear(cleanedText);
   const reData = new RegExp(template.regexData);
   const reValor = new RegExp(template.regexValor);
   const reDescricao = template.regexDescricao ? new RegExp(template.regexDescricao) : null;
 
   const lines = isFullDateTemplate(template.regexData)
-    ? extractFullDateSegments(normalizePdfTextForFullDateParsing(text))
-    : text
+    ? extractFullDateSegments(normalizePdfTextForFullDateParsing(cleanedText))
+    : cleanedText
         .split(/\r?\n/g)
         .map((l) => l.trim())
         .filter(Boolean);

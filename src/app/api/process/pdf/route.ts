@@ -76,6 +76,11 @@ function extractDailyBalances(text: string) {
   return out;
 }
 
+function isPagBankTemplate(input: { nome?: string | null; identificador?: string | null }) {
+  const key = `${input.nome ?? ""} ${input.identificador ?? ""}`.toUpperCase();
+  return key.includes("PAGBANK") || key.includes("PAGSEGURO") || key.includes("PAG SEGURO");
+}
+
 export async function POST(request: Request) {
   const session = await getServerAuthSession();
   const clientId = session?.user.clientId;
@@ -227,6 +232,8 @@ export async function POST(request: Request) {
     data: { templateId: template.id },
   });
 
+  const isPagBank = isPagBankTemplate(template);
+
   let transactions;
   try {
     transactions = parseTransactionsFromText({ text, template, entityId: entity.id });
@@ -293,7 +300,7 @@ export async function POST(request: Request) {
     skipDuplicates: true,
   });
 
-  const dailyBalances = extractDailyBalances(text);
+  const dailyBalances = isPagBank ? [] : extractDailyBalances(text);
   if (dailyBalances.length) {
     await prisma.statementDailyBalance.createMany({
       data: dailyBalances.map((b) => ({
@@ -359,6 +366,12 @@ export async function POST(request: Request) {
         });
       }
     }
+  } else if (isPagBank) {
+    await prisma.statementDailyBalance.deleteMany({ where: { statementId: statement.id } });
+    await prisma.extractionIssue.updateMany({
+      where: { statementId: statement.id, type: "SALDO_DIVERGENTE", status: "OPEN" },
+      data: { status: "IGNORED" },
+    });
   }
 
   const issuesOpen = await prisma.extractionIssue.count({

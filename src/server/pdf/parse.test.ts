@@ -101,3 +101,34 @@ test("parseTransactionsFromText separa duas transações na mesma linha quando h
   assert.equal(out[1].tipo, "SAIDA");
   assert.equal(out[1].valor, "5000.00");
 });
+
+test('parseTransactionsFromText (PAGBANK) ignora "Saldo do dia" e mantém apenas movimentações', () => {
+  const template = {
+    id: "t4",
+    nome: "PAGBANK",
+    identificador: "PAGBANK",
+    regexData: "^(\\d{2}\\/\\d{2}\\/\\d{4})",
+    regexValor: "R\\$\\s*([0-9\\.,]+-?)",
+    regexDescricao: "^\\d{2}\\/\\d{2}\\/\\d{4}\\s+(.+?)\\s+R\\$\\s*[0-9\\.,]+-?$",
+    clientId: "c1",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } satisfies Template;
+
+  const text = [
+    "PAGBANK",
+    "Saldo do dia 01/01/2026 R$ 1.234,56",
+    "01/01/2026 Rendimento da conta R$ 0,02",
+    "02/01/2026 QR Code Pix enviado - Mercado X -R$ R$ 10,00-",
+    "-- 1 of 9 -- Descrição Data Valor",
+    "03/01/2026 Vendas - Disponivel CREDITO VISA R$ 33,25",
+  ].join("\n");
+
+  const out = parseTransactionsFromText({ text, template, entityId: "e1" });
+
+  assert.ok(out.length >= 3);
+  assert.ok(out.every((t) => !/saldo do dia/i.test(t.descricao)));
+  assert.ok(out.some((t) => t.data.toISOString().slice(0, 10) === "2026-01-01" && t.valor === "0.02"));
+  assert.ok(out.some((t) => t.data.toISOString().slice(0, 10) === "2026-01-02" && t.tipo === "SAIDA"));
+  assert.ok(out.some((t) => t.data.toISOString().slice(0, 10) === "2026-01-03" && t.tipo === "ENTRADA"));
+});
