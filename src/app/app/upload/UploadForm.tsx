@@ -23,6 +23,7 @@ type ProcessResult =
 export function UploadForm({ entities }: { entities: EntityOption[] }) {
   const [entityId, setEntityId] = useState(entities[0]?.id ?? "");
   const [file, setFile] = useState<File | null>(null);
+  const [allowDuplicates, setAllowDuplicates] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ProcessResult | null>(null);
 
@@ -39,6 +40,7 @@ export function UploadForm({ entities }: { entities: EntityOption[] }) {
         const formData = new FormData();
         formData.set("entityId", entityId);
         formData.set("file", file);
+        formData.set("allowDuplicates", allowDuplicates ? "true" : "false");
 
         const res = await fetch("/api/process/pdf", {
           method: "POST",
@@ -94,6 +96,30 @@ export function UploadForm({ entities }: { entities: EntityOption[] }) {
             required
           />
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-zinc-200 bg-white p-4">
+        <div className="space-y-1">
+          <div className="text-sm font-medium text-zinc-900">Permitir dados duplicados</div>
+          <div className="text-sm text-zinc-600">
+            Permite enviar o mesmo valor para o mesmo cliente no mesmo dia.
+          </div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={allowDuplicates}
+          onClick={() => setAllowDuplicates((v) => !v)}
+          className={`relative h-7 w-12 rounded-full border transition ${
+            allowDuplicates ? "border-zinc-950 bg-zinc-950" : "border-zinc-200 bg-zinc-100"
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition ${
+              allowDuplicates ? "left-[22px]" : "left-0.5"
+            }`}
+          />
+        </button>
       </div>
 
       <button

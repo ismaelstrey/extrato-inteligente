@@ -128,7 +128,89 @@ test('parseTransactionsFromText (PAGBANK) ignora "Saldo do dia" e mantém apenas
 
   assert.ok(out.length >= 3);
   assert.ok(out.every((t) => !/saldo do dia/i.test(t.descricao)));
+  assert.ok(out.every((t) => !/(?:^|\s)-?R\$(?:\s|$)/i.test(t.descricao)));
   assert.ok(out.some((t) => t.data.toISOString().slice(0, 10) === "2026-01-01" && t.valor === "0.02"));
   assert.ok(out.some((t) => t.data.toISOString().slice(0, 10) === "2026-01-02" && t.tipo === "SAIDA"));
   assert.ok(out.some((t) => t.data.toISOString().slice(0, 10) === "2026-01-03" && t.tipo === "ENTRADA"));
+});
+
+test("parseTransactionsFromText permite gerar dedupeHash diferente quando allowDuplicates=true", () => {
+  const template = {
+    id: "t5",
+    nome: "Teste",
+    identificador: "BANCO",
+    regexData: "^(\\d{2}\\/\\d{2}\\/\\d{4})",
+    regexValor: "R\\$\\s*([0-9\\.,]+-?)",
+    regexDescricao: "^\\d{2}\\/\\d{2}\\/\\d{4}\\s+(.+?)\\s+R\\$\\s*[0-9\\.,]+-?$",
+    clientId: "c1",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } satisfies Template;
+
+  const text = [
+    "BANCO",
+    "01/01/2026 Compra R$ 10,00",
+    "01/01/2026 Compra R$ 10,00",
+  ].join("\n");
+
+  const a = parseTransactionsFromText({ text, template, entityId: "e1" });
+  assert.equal(a.length, 2);
+  assert.equal(a[0].dedupeHash, a[1].dedupeHash);
+
+  const b = parseTransactionsFromText({
+    text,
+    template,
+    entityId: "e1",
+    allowDuplicates: true,
+    dedupeSalt: "statement-1",
+  });
+  assert.equal(b.length, 2);
+  assert.notEqual(b[0].dedupeHash, b[1].dedupeHash);
+});
+
+test("parseTransactionsFromText (BANRISUL) suporta MOVIMENTOS MMM/AAAA e linhas sem dia usando dia corrente", () => {
+  const template = {
+    id: "t6",
+    nome: "Banrisul",
+    identificador: "BANRISUL",
+    regexData: "^(\\d{1,2})\\b",
+    regexValor: "([0-9]{1,3}(?:\\.[0-9]{3})*,[0-9]{2}-?)$",
+    regexDescricao:
+      "^\\s*\\d{1,2}\\s+(.+?)\\s+[0-9A-Za-z]+\\s+[0-9]{1,3}(?:\\.[0-9]{3})*,[0-9]{2}-?$",
+    clientId: "c1",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } satisfies Template;
+
+  const text = [
+    "++ MOVIMENTOS MAR/2026",
+    "02 REND CDB AUT 0000RC 0,02",
+    "VERO DEB BLF 516261 98,90",
+    "PIX RECEBIDO 081049 300,00",
+    "NOME: BRUNA MAIARA RODRIGUES DE OLIVEIRA",
+    "PIX ENVIADO 474432 180,00-",
+    "NOME: JOAO CANDIDO MAZUHI NORONHA",
+    "SALDO NA DATA 135,43",
+  ].join("\n");
+
+  const out = parseTransactionsFromText({ text, template, entityId: "e1" });
+  assert.equal(out.length, 4);
+
+  assert.equal(out[0].data.toISOString().slice(0, 10), "2026-03-02");
+  assert.equal(out[0].tipo, "ENTRADA");
+  assert.equal(out[0].valor, "0.02");
+
+  assert.equal(out[1].data.toISOString().slice(0, 10), "2026-03-02");
+  assert.equal(out[1].tipo, "SAIDA");
+  assert.equal(out[1].valor, "98.90");
+
+  assert.equal(out[2].data.toISOString().slice(0, 10), "2026-03-02");
+  assert.equal(out[2].tipo, "ENTRADA");
+  assert.equal(out[2].valor, "300.00");
+  assert.match(out[2].descricao, /BRUNA/i);
+
+  assert.equal(out[3].data.toISOString().slice(0, 10), "2026-03-02");
+  assert.equal(out[3].tipo, "SAIDA");
+  assert.equal(out[3].valor, "180.00");
+  assert.match(out[3].descricao, /JOAO/i);
 });

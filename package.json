@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test:unit": "tsx --test src/server/**/*.test.ts",
     "test:smoke": "node scripts/parsingSmokeTest.mjs",
+    "template:banrisul": "node scripts/createBanrisulTemplate.mjs",
     "prisma:generate": "prisma generate",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",

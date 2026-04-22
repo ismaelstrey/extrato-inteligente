@@ -90,6 +90,9 @@ export async function POST(request: Request) {
   const formData = await request.formData();
   const entityId = String(formData.get("entityId") ?? "");
   const file = formData.get("file");
+  const allowDuplicatesRaw = String(formData.get("allowDuplicates") ?? "false").toLowerCase();
+  const allowDuplicates =
+    allowDuplicatesRaw === "true" || allowDuplicatesRaw === "1" || allowDuplicatesRaw === "on";
 
   if (!entityId) {
     return Response.json({ ok: false, message: "entityId é obrigatório." }, { status: 400 });
@@ -236,7 +239,13 @@ export async function POST(request: Request) {
 
   let transactions;
   try {
-    transactions = parseTransactionsFromText({ text, template, entityId: entity.id });
+    transactions = parseTransactionsFromText({
+      text,
+      template,
+      entityId: entity.id,
+      allowDuplicates,
+      dedupeSalt: statement.id,
+    });
   } catch {
     await prisma.extractionIssue.create({
       data: {

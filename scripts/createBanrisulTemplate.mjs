@@ -20,11 +20,28 @@ const prisma = new PrismaClient({
   }),
 });
 
-const pdfArg = process.argv[2] ?? "extrato01-04-2026_10-59-06_02-2026.pdf";
+const pdfArg = process.argv[2] ?? "extratos/BANRISUL.pdf";
 const bankArg = (process.argv[3] ?? "banrisul").toLowerCase();
 const pdfPath = path.isAbsolute(pdfArg) ? pdfArg : path.join(process.cwd(), pdfArg);
 const worker = path.join(process.cwd(), "node_modules", "pdfjs-dist", "legacy", "build", "pdf.worker.mjs");
 if (fs.existsSync(worker)) PDFParse.setWorker(pathToFileURL(worker).href);
+
+if (!fs.existsSync(pdfPath)) {
+  throw new Error(
+    [
+      "PDF não encontrado.",
+      `Caminho informado: ${pdfPath}`,
+      "",
+      "Uso:",
+      "  npm run template:banrisul -- \"/caminho/do/arquivo.pdf\" banrisul",
+      "",
+      "Exemplos:",
+      "  npm run template:banrisul -- extratos/BANRISUL.pdf banrisul",
+      "  npm run template:banrisul -- extratos/UNICRED.pdf unicred",
+      "  npm run template:banrisul -- extratos/CRESOL.pdf cresol",
+    ].join("\n"),
+  );
+}
 
 const data = fs.readFileSync(pdfPath);
 const parser = new PDFParse({ data });
